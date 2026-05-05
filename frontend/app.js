@@ -359,23 +359,35 @@ async function searchNominatim(query) {
   const q = query.trim();
   if (q.length < 2) return [];
 
-  const url = `https://nominatim.openstreetmap.org/search?` +
+  // Two parallel searches: general + structured (neighbourhood/suburb)
+  const generalUrl = `https://nominatim.openstreetmap.org/search?` +
     `q=${encodeURIComponent(q)}&format=jsonv2&addressdetails=1&limit=12&accept-language=es,en` +
     `&countrycodes=es,pt,it,fr,de,nl,be,at,ch,gb,ie,se,no,dk,fi,pl,cz,hr,gr,ro,hu`;
 
-  const res = await fetch(url, {
-    headers: { "User-Agent": "cazapiso/1.0 (https://github.com/danielbaudy-oss/CAZAPISO)" },
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
+  // Structured search specifically for neighborhoods/suburbs
+  const structuredUrl = `https://nominatim.openstreetmap.org/search?` +
+    `q=${encodeURIComponent(q)}&format=jsonv2&addressdetails=1&limit=6&accept-language=es,en` +
+    `&countrycodes=es,pt,it,fr,de,nl,be,at,ch,gb,ie,se,no,dk,fi,pl,cz,hr,gr,ro,hu` +
+    `&featuretype=settlement`;
+
+  const headers = { "User-Agent": "cazapiso/1.0 (https://github.com/danielbaudy-oss/CAZAPISO)" };
+
+  const [generalRes, structuredRes] = await Promise.all([
+    fetch(generalUrl, { headers }).then((r) => r.ok ? r.json() : []).catch(() => []),
+    fetch(structuredUrl, { headers }).then((r) => r.ok ? r.json() : []).catch(() => []),
+  ]);
+
+  // Merge results, structured first (more relevant for neighborhoods)
+  const all = [...structuredRes, ...generalRes];
 
   const seen = new Set();
-  return data
+  return all
     .filter((r) => {
       const key = shortName(r).toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
-      return r.class === "place" || r.class === "boundary" || r.type === "administrative";
+      return r.class === "place" || r.class === "boundary" || r.type === "administrative" ||
+        r.addresstype === "quarter" || r.addresstype === "suburb" || r.addresstype === "neighbourhood";
     })
     .slice(0, 8)
     .map((r) => ({
@@ -385,25 +397,26 @@ async function searchNominatim(query) {
       osm_type: r.osm_type,
       lat: parseFloat(r.lat),
       lng: parseFloat(r.lon),
-      type: r.type || r.addresstype || "place",
+      type: r.addresstype || r.type || "place",
       country_code: r.address?.country_code || "",
     }));
 }
 
 function shortName(r) {
-  // Build a concise name: "El Poblenou, Barcelona" or "Madrid, Spain"
   const parts = [];
   const a = r.address || {};
-  const primary = a.neighbourhood || a.suburb || a.quarter || a.borough || a.district ||
-                  a.city || a.town || a.village || a.municipality || r.name || "";
+  
+  // For neighbourhood/quarter/suburb results, use that as primary
+  const primary = a.neighbourhood || a.quarter || a.suburb || a.borough || a.district ||
+                  a.city_district || a.city || a.town || a.village || a.municipality || r.name || "";
   if (primary) parts.push(primary);
 
-  // Add parent context
-  const parent = (a.city || a.town || a.municipality || "");
+  // Add parent context (city)
+  const parent = a.city || a.town || a.municipality || "";
   if (parent && parent !== primary) parts.push(parent);
   else {
     const region = a.state || a.county || a.country || "";
-    if (region) parts.push(region);
+    if (region && region !== primary) parts.push(region);
   }
 
   return parts.join(", ") || r.display_name?.split(",").slice(0, 2).join(",") || "Unknown";

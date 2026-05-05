@@ -1,7 +1,12 @@
-// Puppeteer fallback for when sites block plain fetch.
-// Configured to look like a real desktop browser session.
+// Puppeteer helper for anti-bot sites.
+// Injects cookies (if available) and uses stealth techniques.
 
 import { randomUA } from "../useragents.js";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let browserPromise = null;
 
@@ -28,6 +33,20 @@ async function getBrowser() {
   return browserPromise;
 }
 
+let idealistaCookies = null;
+
+async function loadIdealistaCookies() {
+  if (idealistaCookies !== null) return idealistaCookies;
+  try {
+    const path = join(__dirname, "..", "idealista", "cookies.json");
+    const raw = await readFile(path, "utf-8");
+    idealistaCookies = JSON.parse(raw);
+  } catch {
+    idealistaCookies = [];
+  }
+  return idealistaCookies;
+}
+
 export async function fetchWithHeadless(url) {
   const browser = await getBrowser();
   const page = await browser.newPage();
@@ -42,21 +61,23 @@ export async function fetchWithHeadless(url) {
       "sec-ch-ua-platform": '"Linux"',
     });
 
-    // Override navigator.webdriver to avoid detection.
+    // Stealth: override navigator.webdriver
     await page.evaluateOnNewDocument(() => {
       Object.defineProperty(navigator, "webdriver", { get: () => false });
-      // Fake plugins array.
-      Object.defineProperty(navigator, "plugins", {
-        get: () => [1, 2, 3, 4, 5],
-      });
-      // Fake languages.
-      Object.defineProperty(navigator, "languages", {
-        get: () => ["es-ES", "es", "ca", "en"],
-      });
+      Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
+      Object.defineProperty(navigator, "languages", { get: () => ["es-ES", "es", "ca", "en"] });
     });
 
+    // Inject Idealista cookies if this is an idealista.com URL
+    if (url.includes("idealista.com")) {
+      const cookies = await loadIdealistaCookies();
+      if (cookies.length) {
+        await page.setCookie(...cookies);
+      }
+    }
+
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-    // Random human-like wait (1.5–3.5s).
+    // Random human-like wait
     await new Promise((r) => setTimeout(r, 1500 + Math.random() * 2000));
     return await page.content();
   } finally {

@@ -1,5 +1,8 @@
-# casahunt — Idealista scraper schedule (Pi local time).
+# casahunt — scraper schedule (Pi local time).
 # Install with:  crontab /home/baudy/casahunt/pi-scraper/crontab.txt
+
+# Daily at 06:00: refresh Idealista cookies (DataDome token expires ~24h)
+0 6 * * * cd /home/baudy/casahunt/pi-scraper && /usr/bin/node src/idealista/refresh-cookies.js >> /home/baudy/casahunt/pi-scraper/logs/cookies.log 2>&1
 
 # Every 15 minutes: pull + scrape + notify.
 */15 * * * * /home/baudy/casahunt/pi-scraper/run.sh >> /home/baudy/casahunt/pi-scraper/logs/run.log 2>&1

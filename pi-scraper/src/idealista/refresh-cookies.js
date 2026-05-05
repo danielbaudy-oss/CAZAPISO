@@ -15,7 +15,7 @@ const COOKIES_PATH = join(__dirname, "cookies.json");
 async function refreshCookies() {
   console.log("Refreshing Idealista cookies...");
 
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || "/usr/bin/chromium";
   const browser = await puppeteer.launch({
     headless: "new",
     executablePath,

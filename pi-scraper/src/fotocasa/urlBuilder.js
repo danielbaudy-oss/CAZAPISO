@@ -60,22 +60,21 @@ function citySlugFromLocation(loc) {
 
 function neighborhoodSlugFromLocation(loc) {
   // Extract the most specific part of the location name for the URL.
-  // e.g. "Sant Martí, Barcelona" → "sant-marti"
-  // e.g. "El Poblenou, Sant Martí, Barcelona" → "el-poblenou"
   const name = loc.name || "";
   const firstPart = name.split(",")[0].trim();
-  
-  // Check if we have a known Fotocasa mapping for this neighborhood
   const slug = slugify(firstPart);
   
-  // Look up in our Barcelona mapping first
-  for (const [casahuntSlug, fotocasaSlug] of Object.entries(FOTOCASA_NEIGHBORHOODS)) {
-    if (casahuntSlug === slug || fotocasaSlug === slug || fotocasaSlug.includes(slug)) {
-      return fotocasaSlug;
-    }
+  // Exact match in our Barcelona mapping (casahunt slug → fotocasa slug)
+  if (FOTOCASA_NEIGHBORHOODS[slug]) {
+    return FOTOCASA_NEIGHBORHOODS[slug];
   }
   
-  // Fall back to slugified name
+  // Try matching the fotocasa slug values directly
+  for (const [, fotocasaSlug] of Object.entries(FOTOCASA_NEIGHBORHOODS)) {
+    if (fotocasaSlug === slug) return fotocasaSlug;
+  }
+  
+  // Fall back to slugified name (works for cities outside Barcelona)
   return slug;
 }
 

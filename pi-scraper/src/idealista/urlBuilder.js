@@ -84,7 +84,7 @@ export function buildSearchUrls(filter, nbRecords) {
         const name = (loc.name || "").split(",")[0].trim();
         const slug = slugify(name);
         
-        // Check if we have a known mapping
+        // Check if we have a known mapping (try both the slug and common variants)
         const byCasahuntSlug = new Map(nbRecords.map((n) => [n.slug, n]));
         const n = byCasahuntSlug.get(slug);
         if (n) {
@@ -95,10 +95,33 @@ export function buildSearchUrls(filter, nbRecords) {
           }
         }
         
-        // Fallback: try district-level URL
-        // e.g. "Sant Martí" → /alquiler-viviendas/barcelona/sant-marti/
-        const districtSlug = slugify(name);
-        urls.push(`${IDEALISTA_BASE}/alquiler-viviendas/barcelona/${districtSlug}${tail}`);
+        // Try without "el-", "la-", "les-", "l-" prefix (common in Catalan names)
+        const stripped = slug.replace(/^(el-|la-|les-|l-|els-)/, "");
+        const n2 = byCasahuntSlug.get(stripped);
+        if (n2) {
+          const p = paths(stripped, n2.district);
+          if (p) {
+            urls.push(`${IDEALISTA_BASE}/alquiler-viviendas/barcelona/${p.district}/${p.neighborhood}${tail}`);
+            continue;
+          }
+        }
+
+        // Check display_name for district info
+        const dn = (loc.display_name || "").toLowerCase();
+        let district = null;
+        for (const nb of nbRecords) {
+          const dSlug = slugify(nb.district);
+          if (dn.includes(nb.district.toLowerCase()) || dn.includes(dSlug)) {
+            district = dSlug;
+            break;
+          }
+        }
+        
+        if (district) {
+          urls.push(`${IDEALISTA_BASE}/alquiler-viviendas/barcelona/${district}/${slug}${tail}`);
+        } else {
+          urls.push(`${IDEALISTA_BASE}/alquiler-viviendas/barcelona/${slug}${tail}`);
+        }
       }
     }
     return urls.length ? urls : [`${IDEALISTA_BASE}/alquiler-viviendas/${cityPath(filter)}${tail}`];

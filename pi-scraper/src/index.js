@@ -3,6 +3,13 @@
 //   2. For each filter:
 //      a. Build Idealista search URLs (one per neighborhood, or one for city).
 //      b. Fetch + parse listings.
+
+// Hard timeout: kill the process after 5 minutes no matter what.
+// Prevents zombie processes from piling up when Chromium hangs.
+setTimeout(() => {
+  console.error(new Date().toISOString(), "HARD TIMEOUT (5 min) — forcing exit");
+  process.exit(1);
+}, 5 * 60 * 1000).unref();
 //      c. Stamp canonical_key.
 //      d. Upsert into casahunt.listings_seen (discovers new (source, external_id)).
 //      e. For each NEW listing, insert a row in casahunt.notifications

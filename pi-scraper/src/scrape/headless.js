@@ -82,5 +82,8 @@ export async function fetchWithHeadless(url) {
     return await page.content();
   } finally {
     await page.close();
+    // Close browser after each use to prevent memory leaks and zombie processes.
+    try { await browser.close(); } catch {}
+    browserPromise = null;
   }
 }

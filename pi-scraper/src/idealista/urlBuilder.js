@@ -40,8 +40,26 @@ function buildConSegment(filter) {
 }
 
 function cityPath(filter) {
-  // Hardcoded to Barcelona for MVP. When we add Madrid etc., map filter.city → path.
+  // Try to derive from locations
+  const locations = filter.locations || [];
+  if (locations.length) {
+    const dn = (locations[0].display_name || "").toLowerCase();
+    if (dn.includes("madrid")) return "madrid-madrid";
+    if (dn.includes("valencia")) return "valencia-valencia";
+    if (dn.includes("sevilla")) return "sevilla-sevilla";
+    if (dn.includes("málaga") || dn.includes("malaga")) return "malaga-malaga";
+    if (dn.includes("bilbao")) return "bilbao";
+    if (dn.includes("barcelona")) return "barcelona-barcelona";
+  }
   return "barcelona-barcelona";
+}
+
+function slugify(text) {
+  return text
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 /**
@@ -51,21 +69,55 @@ function cityPath(filter) {
 export function buildSearchUrls(filter, nbRecords) {
   const con = buildConSegment(filter);
   const tail = con ? `/${con}/` : "/";
-  const slugs = filter.neighborhoods || [];
+  const locations = filter.locations || [];
 
+  // New path: use locations field
+  if (locations.length) {
+    const urls = [];
+    for (const loc of locations) {
+      const isCity = (loc.type === "city" || loc.type === "municipality" || loc.type === "town");
+      if (isCity) {
+        // City-level: use the city path
+        urls.push(`${IDEALISTA_BASE}/alquiler-viviendas/${cityPath(filter)}${tail}`);
+      } else {
+        // District/neighborhood: try to build a specific path
+        const name = (loc.name || "").split(",")[0].trim();
+        const slug = slugify(name);
+        
+        // Check if we have a known mapping
+        const byCasahuntSlug = new Map(nbRecords.map((n) => [n.slug, n]));
+        const n = byCasahuntSlug.get(slug);
+        if (n) {
+          const p = paths(slug, n.district);
+          if (p) {
+            urls.push(`${IDEALISTA_BASE}/alquiler-viviendas/barcelona/${p.district}/${p.neighborhood}${tail}`);
+            continue;
+          }
+        }
+        
+        // Fallback: try district-level URL
+        // e.g. "Sant Martí" → /alquiler-viviendas/barcelona/sant-marti/
+        const districtSlug = slugify(name);
+        urls.push(`${IDEALISTA_BASE}/alquiler-viviendas/barcelona/${districtSlug}${tail}`);
+      }
+    }
+    return urls.length ? urls : [`${IDEALISTA_BASE}/alquiler-viviendas/${cityPath(filter)}${tail}`];
+  }
+
+  // Legacy: fall back to old neighborhoods field
+  const slugs = filter.neighborhoods || [];
   if (!slugs.length) {
     return [`${IDEALISTA_BASE}/alquiler-viviendas/${cityPath(filter)}${tail}`];
   }
 
   const byCasahuntSlug = new Map(nbRecords.map((n) => [n.slug, n]));
   const urls = [];
-  const skipped = [];
   for (const slug of slugs) {
     const n = byCasahuntSlug.get(slug);
-    if (!n) { skipped.push(slug); continue; }
+    if (!n) continue;
     const p = paths(slug, n.district);
-    if (!p) { skipped.push(slug); continue; }
+    if (!p) continue;
     urls.push(`${IDEALISTA_BASE}/alquiler-viviendas/barcelona/${p.district}/${p.neighborhood}${tail}`);
   }
-  return urls;
+  return urls.length ? urls : [`${IDEALISTA_BASE}/alquiler-viviendas/${cityPath(filter)}${tail}`];
 }

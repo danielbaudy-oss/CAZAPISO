@@ -56,12 +56,18 @@ function parseCard($, $el, baseUrl) {
   let priceText = $el.find("[class*='display']").first().text() ||
                   $el.find("[class*='price']").first().text() || "";
   let price_eur = toInt(priceText);
-  if (!price_eur) {
-    // Fallback: find "N.NNN €" or "N €" pattern in the card text.
+  if (!price_eur || price_eur > 50000) {
+    // Fallback: find "N.NNN €/mes" or "N.NNN €" pattern in the card text.
+    // Only match reasonable rental prices (100–15,000 €).
     const cardText = $el.text();
-    const priceMatch = cardText.match(/([\d.]+)\s*€/);
-    if (priceMatch) price_eur = toInt(priceMatch[1]);
+    const priceMatches = [...cardText.matchAll(/([\d.]+)\s*€/g)];
+    for (const m of priceMatches) {
+      const v = toInt(m[1]);
+      if (v && v >= 100 && v <= 15000) { price_eur = v; break; }
+    }
   }
+  // Final sanity check
+  if (price_eur && price_eur > 15000) price_eur = null;
 
   // Details — rooms, m², floor in <ul><li> items.
   let rooms = null, size_m2 = null;
